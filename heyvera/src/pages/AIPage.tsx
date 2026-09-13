@@ -227,6 +227,16 @@ export function AIPage() {
         </div>
       </div>
 
+      <div
+        className="mx-4 mt-4 rounded-xl border px-4 py-3 text-[13px] leading-relaxed"
+        style={{ borderColor: 'var(--border-primary)', backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+        role="status"
+      >
+        <strong style={{ color: 'var(--text-primary)' }}>New draft creation is paused.</strong>{' '}
+        Existing drafts, approvals, publishing, schedules, and goals remain available while Socials billing is finalized.
+        Pulse does not use Cortex credits.
+      </div>
+
       <X402AgentPaymentsCard isSignedIn={Boolean(isSignedIn)} getToken={getToken} />
 
       {activeTab === 'drafts' && (
@@ -306,10 +316,13 @@ function ChatTab({ authEnabled, isSignedIn, getToken }: { authEnabled: boolean; 
       setMessages((prev) => [...prev, veraMsg]);
     } catch (err) {
       const status = err instanceof PulseApiError ? err.status : null;
+      const code = err instanceof PulseApiError ? err.code : null;
       const serverMsg = err instanceof Error ? err.message : '';
       const content =
-        status === 402 || /insufficient credits|INSUFFICIENT_CREDITS/i.test(serverMsg)
-          ? pulseCreditErrorMessage(err, status)
+        status === 402 ||
+        code === 'SOCIALS_BILLING_UNAVAILABLE' ||
+        /insufficient credits|INSUFFICIENT_CREDITS|SOCIALS_BILLING_UNAVAILABLE/i.test(serverMsg)
+          ? pulseCreditErrorMessage(err, status, code)
           : serverMsg ||
             "Couldn't reach Pulse tools. Check your connection and try again.";
       const errMsg: ChatMessage = {

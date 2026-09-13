@@ -3,115 +3,14 @@ import { useAuth } from '../hooks/useAuth';
 import {
   BILLING_HISTORY_DEFAULT_LIMIT,
   fetchBillingHistory,
-  fetchBillingUsage,
   resolveBillingPath,
   type BillingHistoryEntry,
-  type BillingUsageResponse,
 } from '../api/billing';
 import {
   accessStateLabel,
-  formatAccessPlanLabel,
   isPremiumAccess,
   normalizeAccessState,
 } from '../utils/accessState';
-
-/** Premium is credits for automation — not “unlimited projects”. */
-const FEATURES: { label: string; status: 'planned' | 'partial' | 'live' }[] = [
-  { label: 'Pulse draft credits (automation runs)', status: 'partial' },
-  { label: 'Scheduled post processing', status: 'partial' },
-  { label: 'Agent / Page API key usage quota', status: 'planned' },
-  { label: 'Higher rate limits for social write APIs', status: 'planned' },
-  { label: 'Priority Pulse tool routing when LLM keys are set', status: 'planned' },
-];
-
-interface TierCardProps {
-  label: string;
-  price: string;
-  period: string;
-  badge: string;
-  badgeHighlight?: boolean;
-  onSubscribe?: () => void;
-  disabled?: boolean;
-  ctaLabel?: string;
-  disabledReason?: string;
-}
-
-function TierCard({
-  label,
-  price,
-  period,
-  badge,
-  badgeHighlight,
-  onSubscribe,
-  disabled,
-  ctaLabel = 'Subscribe',
-  disabledReason,
-}: TierCardProps) {
-  return (
-    <div className="flex flex-1 flex-col rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-elevated)] p-6">
-      <div className="mb-4">
-        <h3 className="text-[15px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">{label}</h3>
-        <div className="mt-2 flex items-baseline gap-1">
-          <span className="text-[36px] font-bold text-[var(--text-primary)]">{price}</span>
-          <span className="text-[15px] text-[var(--text-secondary)]">/{period}</span>
-        </div>
-        <span
-          className={`mt-2 inline-block rounded-full px-3 py-0.5 text-[13px] font-medium ${
-            badgeHighlight
-              ? 'bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] text-[var(--accent)]'
-              : 'bg-[var(--border-primary)] text-[var(--text-secondary)]'
-          }`}
-        >
-          {badge}
-        </span>
-      </div>
-
-      <ul className="flex-1 space-y-3 mb-6">
-        {FEATURES.map((feature) => (
-          <li key={feature.label} className="flex items-start gap-3 text-[15px] text-[var(--text-primary)]">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--text-secondary)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="flex-shrink-0 mt-0.5"
-              aria-hidden="true"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            <span>
-              {feature.label}
-              <span className="ml-2 text-[12px] font-medium text-[var(--text-secondary)]">
-                {feature.status === 'live'
-                  ? 'Live'
-                  : feature.status === 'partial'
-                    ? 'Early access'
-                    : 'Coming soon'}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onSubscribe}
-        title={disabled ? disabledReason ?? 'Self-serve checkout is not available' : undefined}
-        className="w-full rounded-full bg-[var(--accent)] py-3 text-[15px] font-bold text-[var(--bg-primary)] transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {ctaLabel}
-      </button>
-      {disabled && disabledReason ? (
-        <p className="mt-2 text-center text-[12px] text-[var(--text-secondary)]">{disabledReason}</p>
-      ) : null}
-    </div>
-  );
-}
 
 type BillingStatus = {
   active: boolean;
@@ -173,297 +72,131 @@ async function openBillingPortal(token: string): Promise<string | null> {
   }
 }
 
-/** Attempt Stripe checkout; returns null when Stripe/billing is not configured. */
-async function startCheckout(
-  token: string,
-  plan: 'monthly' | 'annual',
-): Promise<{ url: string | null; error: string | null }> {
-  try {
-    const res = await fetch(resolveBillingPath('/api/billing/checkout'), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ plan }),
-    });
-    if (!res.ok) {
-      const err = (await res.json().catch(() => ({}))) as { error?: string };
-      return {
-        url: null,
-        error: err.error ?? `Checkout unavailable (${res.status})`,
-      };
-    }
-    const data = (await res.json()) as { checkout_url?: string; url?: string };
-    const url = data.checkout_url || data.url || null;
-    return { url, error: url ? null : 'Checkout session returned no URL' };
-  } catch {
-    return { url: null, error: 'Unable to reach billing service' };
-  }
-}
-
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function formatPlanStatus(usage: BillingUsageResponse | null, status: BillingStatus | null): string {
-  return formatAccessPlanLabel({
-    accessState: usage?.access_state ?? status?.access_state,
-    planType: usage?.plan?.plan_type ?? status?.plan,
-    active: usage?.active ?? status?.active,
-  });
-}
-
-function UsageCreditsSection({
-  usage,
-  loading,
-  billingStatus,
+function BillingHistorySection({
   getToken,
 }: {
-  usage: BillingUsageResponse | null;
-  loading: boolean;
-  billingStatus: BillingStatus | null;
   getToken: () => Promise<string | null>;
 }) {
-  const [historyItems, setHistoryItems] = useState<BillingHistoryEntry[]>([]);
+  const [items, setItems] = useState<BillingHistoryEntry[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [historyReady, setHistoryReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initial history page from dedicated pagination API (not client-side slice).
   useEffect(() => {
     let cancelled = false;
-    setHistoryReady(false);
-    setHistoryItems([]);
-    setHasMore(false);
-    setNextOffset(null);
-    setHistoryError(null);
-
     void (async () => {
-      setHistoryLoading(true);
-      try {
-        const token = await getToken();
-        if (!token || cancelled) return;
-        const page = await fetchBillingHistory(token, {
-          limit: BILLING_HISTORY_DEFAULT_LIMIT,
-          offset: 0,
-        });
-        if (cancelled) return;
-        if (!page) {
-          // Fall back to embedded usage history (first page only) without inventing more.
-          const fallback = usage?.history ?? [];
-          setHistoryItems(fallback);
-          setHasMore(false);
-          setNextOffset(null);
-          if (!usage) {
-            setHistoryError('Billing history unavailable.');
-          }
-          return;
-        }
-        setHistoryItems(page.items);
-        setHasMore(page.hasMore);
-        setNextOffset(page.nextOffset);
-      } finally {
-        if (!cancelled) {
-          setHistoryLoading(false);
-          setHistoryReady(true);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // Re-fetch when usage identity changes (sign-in / refresh).
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- getToken + usage load gate
-  }, [usage, getToken]);
-
-  const loadMoreHistory = useCallback(async () => {
-    if (!hasMore || nextOffset == null || historyLoading) return;
-    setHistoryLoading(true);
-    setHistoryError(null);
-    try {
       const token = await getToken();
-      if (!token) {
-        setHistoryError('Sign in required to load more history.');
+      if (!token || cancelled) {
+        if (!cancelled) {
+          setError('Sign in required to load billing history.');
+          setLoading(false);
+        }
         return;
       }
       const page = await fetchBillingHistory(token, {
         limit: BILLING_HISTORY_DEFAULT_LIMIT,
-        offset: nextOffset,
+        offset: 0,
       });
+      if (cancelled) return;
       if (!page) {
-        setHistoryError('Could not load more billing history.');
+        setError('Billing history unavailable.');
+        setLoading(false);
         return;
       }
-      setHistoryItems((prev) => [...prev, ...page.items]);
+      setItems(page.items);
       setHasMore(page.hasMore);
       setNextOffset(page.nextOffset);
-    } finally {
-      setHistoryLoading(false);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken]);
+
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore || nextOffset === null) return;
+    setLoading(true);
+    setError(null);
+    const token = await getToken();
+    if (!token) {
+      setError('Sign in required to load more billing history.');
+      setLoading(false);
+      return;
     }
-  }, [getToken, hasMore, historyLoading, nextOffset]);
-
-  if (loading) {
-    return (
-      <section
-        className="mb-8 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-elevated)] p-6"
-        role="status"
-        aria-live="polite"
-      >
-        <h2 className="text-[16px] font-bold text-[var(--text-primary)] mb-2">Usage &amp; credits</h2>
-        <p className="text-[14px] text-[var(--text-secondary)]">Loading usage…</p>
-      </section>
-    );
-  }
-
-  const hasUsageData = usage !== null;
-  const u = usage?.usage;
-  const access = normalizeAccessState(usage?.access_state ?? billingStatus?.access_state);
+    const page = await fetchBillingHistory(token, {
+      limit: BILLING_HISTORY_DEFAULT_LIMIT,
+      offset: nextOffset,
+    });
+    if (!page) {
+      setError('Could not load more billing history.');
+      setLoading(false);
+      return;
+    }
+    setItems((current) => [...current, ...page.items]);
+    setHasMore(page.hasMore);
+    setNextOffset(page.nextOffset);
+    setLoading(false);
+  }, [getToken, hasMore, loading, nextOffset]);
 
   return (
     <section className="mb-8 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-elevated)] p-6">
-      <h2 className="text-[16px] font-bold text-[var(--text-primary)] mb-1">Usage &amp; credits</h2>
-      <p className="text-[13px] text-[var(--text-secondary)] mb-4">
-        Plan status and automation usage from the API. Credit balances are only shown when metered.
+      <h2 className="text-[16px] font-bold text-[var(--text-primary)]">Billing history</h2>
+      <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
+        Existing subscription events remain available while new checkout is paused.
       </p>
 
-      <dl className="space-y-3 text-[14px]">
-        <div className="flex justify-between gap-4">
-          <dt className="text-[var(--text-secondary)]">Plan status</dt>
-          <dd className="font-medium text-[var(--text-primary)] text-right">
-            {formatPlanStatus(usage, billingStatus)}
-          </dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-[var(--text-secondary)]">Access</dt>
-          <dd className="font-medium text-[var(--text-primary)] text-right">
-            {accessStateLabel(access)}
-            <span className="block text-[12px] mt-0.5 text-[var(--text-secondary)] font-normal">
-              {access === 'unknown'
-                ? 'No access_state from API'
-                : `access_state: ${access}`}
-            </span>
-          </dd>
-        </div>
-
-        <div className="flex justify-between gap-4">
-          <dt className="text-[var(--text-secondary)]">Credits balance</dt>
-          <dd className="font-medium text-[var(--text-primary)] text-right">
-            {usage && usage.creditsBalance !== null && usage.creditsBalance !== undefined ? (
-              <span>
-                {usage.creditsBalance}
-                <span className="block text-[12px] mt-0.5 text-[var(--text-secondary)] font-normal">
-                  {usage.note?.trim() || 'metered'}
-                </span>
-              </span>
-            ) : (
-              <span className="text-[var(--text-secondary)] font-normal">
-                Not metered yet
-                {usage?.note ? (
-                  <span className="block text-[12px] mt-0.5">{usage.note}</span>
-                ) : (
-                  <span className="block text-[12px] mt-0.5">ledger balance not metered yet</span>
-                )}
-              </span>
-            )}
-          </dd>
-        </div>
-
-        {hasUsageData && u ? (
-          <>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--text-secondary)]">Usage (24h)</dt>
-              <dd className="text-right text-[var(--text-primary)]">
-                {u.last_24h.step_count} steps · {u.last_24h.total_tokens_in + u.last_24h.total_tokens_out}{' '}
-                tokens
-                {u.last_24h.total_cost_estimate > 0
-                  ? ` · ~$${u.last_24h.total_cost_estimate.toFixed(4)}`
-                  : ''}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--text-secondary)]">Usage (30d)</dt>
-              <dd className="text-right text-[var(--text-primary)]">
-                {u.last_30d.step_count} steps · {u.last_30d.total_tokens_in + u.last_30d.total_tokens_out}{' '}
-                tokens
-                {u.last_30d.total_cost_estimate > 0
-                  ? ` · ~$${u.last_30d.total_cost_estimate.toFixed(4)}`
-                  : ''}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--text-secondary)]">Today (est. cost / steps)</dt>
-              <dd className="text-right text-[var(--text-primary)]">
-                ~${u.daily_cost.toFixed(4)} · {u.daily_steps} steps
-              </dd>
-            </div>
-          </>
-        ) : (
-          <p className="text-[13px] text-[var(--text-secondary)]">
-            Usage summary unavailable (sign in required, or API not reachable).
-          </p>
-        )}
-      </dl>
-
-      {historyReady && historyItems.length > 0 ? (
-        <div className="mt-5 border-t border-[var(--border-primary)] pt-4">
-          <h3 className="text-[14px] font-semibold text-[var(--text-primary)] mb-3">
-            Billing history
-          </h3>
-          <ul className="space-y-2">
-            {historyItems.map((entry, i) => (
-              <li
-                key={`${entry.date}-${entry.description}-${i}`}
-                className="flex items-start justify-between gap-3 text-[13px]"
-              >
-                <div>
-                  <div className="text-[var(--text-primary)]">{entry.description}</div>
-                  <div className="text-[var(--text-secondary)]">
-                    {entry.date
-                      ? (() => {
-                          const d = new Date(entry.date);
-                          return Number.isNaN(d.getTime())
-                            ? entry.date
-                            : d.toLocaleDateString();
-                        })()
-                      : '—'}
-                    {' · '}
-                    {entry.status}
-                  </div>
-                </div>
-                <div className="shrink-0 font-medium text-[var(--text-primary)]">
-                  {entry.amount_cents ? formatCents(entry.amount_cents) : '—'}
-                </div>
-              </li>
-            ))}
-          </ul>
-          {hasMore ? (
-            <button
-              type="button"
-              disabled={historyLoading}
-              onClick={() => void loadMoreHistory()}
-              className="mt-4 w-full rounded-full border border-[var(--border-primary)] py-2 text-[13px] font-semibold text-[var(--text-primary)] transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+      {items.length > 0 ? (
+        <ul className="mt-4 space-y-2 border-t border-[var(--border-primary)] pt-4">
+          {items.map((entry, index) => (
+            <li
+              key={`${entry.date}-${entry.description}-${index}`}
+              className="flex items-start justify-between gap-3 text-[13px]"
             >
-              {historyLoading ? 'Loading…' : 'Load more'}
-            </button>
-          ) : null}
-          {historyError ? (
-            <p className="mt-2 text-[12px] text-[var(--color-danger)]" role="alert">
-              {historyError}
-            </p>
-          ) : null}
-        </div>
-      ) : historyReady && (hasUsageData || historyError) ? (
+              <div>
+                <div className="text-[var(--text-primary)]">{entry.description}</div>
+                <div className="text-[var(--text-secondary)]">
+                  {entry.date
+                    ? (() => {
+                        const date = new Date(entry.date);
+                        return Number.isNaN(date.getTime())
+                          ? entry.date
+                          : date.toLocaleDateString();
+                      })()
+                    : '—'}
+                  {' · '}
+                  {entry.status}
+                </div>
+              </div>
+              <div className="shrink-0 font-medium text-[var(--text-primary)]">
+                {entry.amount_cents ? formatCents(entry.amount_cents) : '—'}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : !loading ? (
         <p className="mt-4 text-[13px] text-[var(--text-secondary)]">
-          {historyError ?? 'No billing history events yet.'}
+          {error ?? 'No billing history events yet.'}
         </p>
-      ) : historyLoading ? (
+      ) : null}
+
+      {loading ? (
         <p className="mt-4 text-[13px] text-[var(--text-secondary)]" role="status">
           Loading billing history…
         </p>
+      ) : null}
+      {hasMore && !loading ? (
+        <button
+          type="button"
+          onClick={() => void loadMore()}
+          className="mt-4 w-full rounded-full border border-[var(--border-primary)] py-2 text-[13px] font-semibold text-[var(--text-primary)] transition-opacity hover:opacity-80"
+        >
+          Load more
+        </button>
       ) : null}
     </section>
   );
@@ -531,59 +264,24 @@ export function PremiumPage() {
   const { isSignedIn, getToken } = useAuth();
 
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
-  const [billingUsage, setBillingUsage] = useState<BillingUsageResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
-  const [loadingUsage, setLoadingUsage] = useState(false);
   const [managing, setManaging] = useState(false);
-  const [checkoutBusy, setCheckoutBusy] = useState<'monthly' | 'annual' | null>(null);
   const [portalError, setPortalError] = useState<string | null>(null);
-  const [checkoutAvailable, setCheckoutAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!isSignedIn) {
-      setCheckoutAvailable(null);
       setBillingStatus(null);
-      setBillingUsage(null);
       return;
     }
 
     setLoadingStatus(true);
-    setLoadingUsage(true);
     void (async () => {
       try {
         const token = await getToken();
         if (!token) return;
-
-        const [status, usage] = await Promise.all([
-          fetchBillingStatus(token),
-          fetchBillingUsage(token),
-        ]);
-        setBillingStatus(status);
-        setBillingUsage(usage);
-
-        // Probe checkout once so Unavailable shows before first click when Stripe is down.
-        // Using monthly plan as a lightweight probe; no redirect unless user explicitly subscribes.
-        const probe = await startCheckout(token, 'monthly');
-        if (probe.url) {
-          // Do not auto-redirect; session may be single-use. Mark available only.
-          setCheckoutAvailable(true);
-        } else {
-          const msg = (probe.error ?? '').toLowerCase();
-          const stripeMissing =
-            msg.includes('stripe') ||
-            msg.includes('not configured') ||
-            msg.includes('unavailable') ||
-            msg.includes('502') ||
-            msg.includes('503') ||
-            msg.includes('501');
-          setCheckoutAvailable(stripeMissing ? false : true);
-          if (stripeMissing && probe.error) {
-            setPortalError(probe.error);
-          }
-        }
+        setBillingStatus(await fetchBillingStatus(token));
       } finally {
         setLoadingStatus(false);
-        setLoadingUsage(false);
       }
     })();
   }, [isSignedIn, getToken]);
@@ -610,42 +308,10 @@ export function PremiumPage() {
     }
   };
 
-  const handleSubscribe = async (plan: 'monthly' | 'annual') => {
-    setPortalError(null);
-    if (!isSignedIn) {
-      setPortalError('Sign in to subscribe.');
-      return;
-    }
-    setCheckoutBusy(plan);
-    try {
-      const token = await getToken();
-      if (!token) {
-        setPortalError('Sign in again to start checkout.');
-        return;
-      }
-      const result = await startCheckout(token, plan);
-      if (result.url) {
-        setCheckoutAvailable(true);
-        window.location.href = result.url;
-        return;
-      }
-      setCheckoutAvailable(false);
-      setPortalError(
-        result.error
-          ? `${result.error}. Subscribe stays disabled until Stripe billing is configured.`
-          : 'Checkout is not available yet (billing not configured).',
-      );
-    } finally {
-      setCheckoutBusy(null);
-    }
-  };
-
   // Never invent premium — only server active flag or known access_state.
   const isPremium =
     billingStatus?.active === true ||
-    billingUsage?.active === true ||
-    isPremiumAccess(billingUsage?.access_state ?? billingStatus?.access_state);
-  const subscribeDisabled = checkoutAvailable === false;
+    isPremiumAccess(billingStatus?.access_state);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
@@ -655,14 +321,13 @@ export function PremiumPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-8">
         <p className="mb-4 text-[15px] leading-relaxed text-[var(--text-secondary)]">
-          Premium is for <strong className="text-[var(--text-primary)]">automation credits</strong> —
-          Pulse drafts, scheduled posts, and API usage for your Page. It is not unlimited projects or vanity badges.
+          Existing Premium members can review their subscription and open the billing portal.
+          New subscriptions and Pulse draft creation are paused while Socials pricing and entitlements are finalized.
         </p>
 
         <div className="mb-8 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-elevated)] px-4 py-3 text-[14px] text-[var(--text-secondary)]">
           <strong className="text-[var(--text-primary)]">Honest status.</strong>{' '}
-          Self-serve checkout works only when Stripe is configured on the API. If checkout fails, we leave Subscribe
-          disabled with a reason instead of faking a payment flow.
+          No checkout session will be created, and Socials will not use Cortex credits during this pause.
         </div>
 
         {loadingStatus ? (
@@ -689,9 +354,7 @@ export function PremiumPage() {
             status={
               billingStatus ?? {
                 active: true,
-                plan: billingUsage?.plan?.plan_type,
-                period_end: billingUsage?.plan?.billing_period_end,
-                access_state: billingUsage?.access_state,
+                access_state: 'active',
               }
             }
             onManage={() => void handleManage()}
@@ -700,72 +363,24 @@ export function PremiumPage() {
         ) : null}
 
         {isSignedIn ? (
-          <UsageCreditsSection
-            usage={billingUsage}
-            loading={loadingUsage}
-            billingStatus={billingStatus}
-            getToken={getToken}
-          />
+          <BillingHistorySection getToken={getToken} />
         ) : null}
 
         {!loadingStatus && !isPremium ? (
-          <>
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <TierCard
-                label="Monthly"
-                price="$6.99"
-                period="mo"
-                badge="Credits plan"
-                disabled={subscribeDisabled || !isSignedIn || checkoutBusy !== null}
-                ctaLabel={
-                  checkoutBusy === 'monthly'
-                    ? 'Opening…'
-                    : subscribeDisabled
-                      ? 'Unavailable'
-                      : !isSignedIn
-                        ? 'Sign in to subscribe'
-                        : 'Subscribe'
-                }
-                disabledReason={
-                  subscribeDisabled
-                    ? 'Stripe checkout not configured on this environment'
-                    : !isSignedIn
-                      ? 'Sign in required'
-                      : undefined
-                }
-                onSubscribe={() => void handleSubscribe('monthly')}
-              />
-              <TierCard
-                label="Annual"
-                price="$69"
-                period="yr"
-                badge="Save 17%"
-                badgeHighlight
-                disabled={subscribeDisabled || !isSignedIn || checkoutBusy !== null}
-                ctaLabel={
-                  checkoutBusy === 'annual'
-                    ? 'Opening…'
-                    : subscribeDisabled
-                      ? 'Unavailable'
-                      : !isSignedIn
-                        ? 'Sign in to subscribe'
-                        : 'Subscribe'
-                }
-                disabledReason={
-                  subscribeDisabled
-                    ? 'Stripe checkout not configured on this environment'
-                    : !isSignedIn
-                      ? 'Sign in required'
-                      : undefined
-                }
-                onSubscribe={() => void handleSubscribe('annual')}
-              />
-            </div>
-
-            <p className="mt-6 text-center text-[13px] text-[var(--text-secondary)]">
-              If you already have Premium, sign in to check status and manage billing above.
+          <section className="rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-elevated)] p-6">
+            <h2 className="text-[17px] font-bold text-[var(--text-primary)]">New subscriptions paused</h2>
+            <p className="mt-2 text-[14px] leading-relaxed text-[var(--text-secondary)]">
+              Self-serve checkout is unavailable until Socials has its own approved commercial model.
+              Existing members can sign in to manage their subscription; no Cortex balance is used here.
             </p>
-          </>
+            <button
+              type="button"
+              disabled
+              className="mt-5 w-full rounded-full bg-[var(--accent)] py-3 text-[15px] font-bold text-[var(--bg-primary)] opacity-50 cursor-not-allowed"
+            >
+              Checkout unavailable
+            </button>
+          </section>
         ) : null}
       </div>
     </div>

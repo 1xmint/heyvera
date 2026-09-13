@@ -1,6 +1,6 @@
 /**
- * Honest Pulse credit / metering error copy.
- * Never invent balances — only surface server messages (e.g. 402 insufficient credits).
+ * Honest Pulse creation error copy during the Socials billing transition.
+ * Never imply that draft creation is free when its commercial policy is unavailable.
  */
 
 /** True when an error message or HTTP status indicates insufficient credits. */
@@ -25,6 +25,7 @@ export function isInsufficientCreditsError(
 export function pulseCreditErrorMessage(
   err: unknown,
   status?: number | null,
+  code?: string | null,
 ): string {
   const raw =
     err instanceof Error
@@ -35,6 +36,17 @@ export function pulseCreditErrorMessage(
           ? String((err as { error?: unknown }).error ?? '')
           : '';
   const msg = raw.trim();
+
+  if (
+    code === 'SOCIALS_BILLING_UNAVAILABLE' ||
+    /SOCIALS_BILLING_UNAVAILABLE/i.test(msg) ||
+    (status === 503 && /socials billing|commercial model/i.test(msg))
+  ) {
+    return (
+      msg ||
+      'Pulse draft creation is temporarily unavailable while Socials billing is being finalized.'
+    );
+  }
 
   if (isInsufficientCreditsError(msg, status)) {
     return (

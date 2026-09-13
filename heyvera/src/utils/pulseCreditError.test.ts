@@ -30,4 +30,15 @@ describe('pulseCreditErrorMessage', () => {
       'Create a profile first',
     );
   });
+
+  it('surfaces the stable Socials billing pause without claiming drafts are free', () => {
+    const msg = pulseCreditErrorMessage(
+      '',
+      503,
+      'SOCIALS_BILLING_UNAVAILABLE',
+    );
+    expect(msg).toContain('temporarily unavailable');
+    expect(msg).toContain('Socials billing');
+    expect(msg.toLowerCase()).not.toContain('free');
+  });
 });
