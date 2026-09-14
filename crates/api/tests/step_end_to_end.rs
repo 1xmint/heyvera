@@ -90,7 +90,7 @@ async fn test_app(workspace: &std::path::Path) -> (axum::Router, Arc<AppState>) 
     let scheduler_tx = scheduler::spawn_scheduler(state.clone());
     state.set_scheduler_tx(scheduler_tx).await;
 
-    let app = cortex_api::build_router(state.clone());
+    let app = cortex_api::build_cortex_router(state.clone());
     (app, state)
 }
 

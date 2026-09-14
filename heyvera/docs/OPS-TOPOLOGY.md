@@ -8,21 +8,22 @@ This note describes how **heyvera.org**, **api.heyvera.org**, and **cortex.heyve
 |---------|---------------|------|-------------------------|
 | `/v1/social/*` | **heyvera-server** | **3002** | → `localhost:3002` + X-Forwarded-For / X-Real-IP |
 | `/v1/pulse/*` | **heyvera-server** | **3002** | → `localhost:3002` + X-Forwarded-For / X-Real-IP |
-| `/v1/health`, `/v1/ready` | **heyvera-server** | **3002** | → `localhost:3002` |
-| `/api/*` | **cortex-server** | **3001** | → `localhost:3001` |
-| remaining `/v1/*` | legacy Node (if needed) | **3402** | → `localhost:3402` |
+| `/v1/health`, `/v1/ready`, `/metrics` | **both, independently** | **3001/3002** | Socials origins → `localhost:3002`; Cortex origin → `localhost:3001` |
+| Socials-owned and duplicated `/api` paths | **heyvera-server** | **3002** | explicit matcher → `localhost:3002` |
+| Cortex-only `/api` paths | **cortex-server** | **3001** | explicit compatibility matcher → `localhost:3001` |
+| unclassified `/api/*` or `/v1/*` | none | n/a | explicit `404`; no prefix fallback |
 
 **Single owner for Social + Pulse:** `heyvera-server` (`crates/heyvera-server`, binary name `heyvera-server`, cargo package `heyvera-server-bin`). Do not route production Social/Pulse to cortex-server.
 
-Cortex still mounts a **subset** of `/v1/social/*` with **rate-limit middleware** as defense-in-depth if Caddy is misconfigured. Primary production traffic must hit **:3002**.
+Cortex mounts no Socials or Pulse route. Misrouting fails with `404` at both Caddy and the Rust router instead of reaching a second implementation.
 
 ## Binaries and default ports
 
 | Binary | Crate | Default port | Router builder | Typical role |
 |--------|--------|--------------|----------------|--------------|
 | `heyvera-server` | `crates/heyvera-server` | **3002** (`HEYVERA_PORT`) | `cortex_api::build_heyvera_router` | **Owner** of Social + Pulse + `/v1/health` |
-| `cortex-server` | `crates/cortex-server` | **3001** (`CORTEX_PORT`) | `cortex_api::build_cortex_router` | Cortex product `/api/*` + rate-limited social subset (mis-route defense) |
-| Legacy Node / product API | (deploy scripts) | **3402** | n/a in Rust | Remaining non-social `/v1/*` on api.heyvera.org if still needed |
+| `cortex-server` | `crates/cortex-server` | **3001** (`CORTEX_PORT`) | `cortex_api::build_cortex_router` | Cortex-only and independently duplicated routes |
+| Legacy Node / product API | (deploy scripts) | **3402** | n/a in Rust | Not reachable through the HeyVera/Cortex route ownership boundary |
 
 Sources: `crates/heyvera-server/src/main.rs`, `crates/cortex-server/src/main.rs`, `crates/api/src/lib.rs`, `Caddyfile`, `scripts/deploy-vera.sh`, `deploy/heyvera-api.service`.
 
@@ -35,8 +36,10 @@ handle /v1/social/*     → localhost:3002   (heyvera-server) + XFF/X-Real-IP
 handle /v1/pulse/*      → localhost:3002   (heyvera-server) + XFF/X-Real-IP
 handle /v1/health       → localhost:3002
 handle /v1/ready        → localhost:3002
-handle /api/*           → localhost:3001   (cortex-server, billing same-origin)
-handle /v1/*            → localhost:3402   (legacy remainder only)
+handle /metrics         → localhost:3002
+handle @heyvera_api     → localhost:3002   (literal Socials + duplicated API matcher)
+handle /api/*           → 404
+handle /v1/*            → 404
 handle /assets/*        → static under /home/guardian/www/heyvera
 handle (SPA)            → same root, try_files → /index.html
 ```
@@ -47,12 +50,15 @@ handle (SPA)            → same root, try_files → /index.html
 ### `api.heyvera.org` (ENFORCED)
 
 ```
-handle /api/*           → localhost:3001   (Cortex) + XFF/X-Real-IP
+handle @heyvera_api     → localhost:3002   (literal Socials + duplicated API matcher)
+handle @cortex_api      → localhost:3001   (explicit Cortex compatibility families)
+handle /api/*           → 404
 handle /v1/social/*     → localhost:3002   (heyvera-server) + XFF/X-Real-IP
 handle /v1/pulse/*      → localhost:3002   (heyvera-server) + XFF/X-Real-IP
 handle /v1/health       → localhost:3002
 handle /v1/ready        → localhost:3002
-handle /v1/*            → localhost:3402   (legacy remainder)
+handle /metrics         → localhost:3002
+handle /v1/*            → 404
 ```
 
 ### `cortex.heyvera.org`
@@ -78,15 +84,18 @@ Smoke: `scripts/heyvera-launch-smoke.sh` (probes `/v1/health`, `/v1/social/trend
 
 - Full `/v1/social/*` (profiles, feed, posts, media, bookmarks, follows, notifications, communities, messaging, moderation, linked-agents, etc.)
 - `/v1/pulse/*` (drafts, approve/reject/publish, chat tools, schedules/process, goals)
-- Shared `/api/auth/status`, billing, Clerk webhooks (subset)
+- Socials-owned Clerk webhooks and admin operations
+- Independent health, metrics, Socials subscription maintenance, and Socials admin handlers
 - **Rate-limit middleware** on the whole router
 - Optional static dir: `HEYVERA_STATIC_DIR` default `heyvera/dist`
 
 ### `build_cortex_router` (cortex-server)
 
-- Full Cortex `/api/*` surface
-- **Partial** social mount with **rate_limit_middleware** (defense if mis-routed)
-- Pulse is **not** on cortex-router
+- Cortex-only API, worker, gateway, integrations, and admin paths
+- Independent health, metrics, billing, Stripe, and admin handlers
+- No Socials, Pulse, Socials Clerk webhook, or Socials account-admin route
+
+The checked-in `crates/api/route-manifest.csv` is authoritative for all 205 literal templates and methods. `crates/api/tests/route_ownership.rs` compares it with both router definitions and probes every foreign route for `404`.
 
 Always re-check `crates/api/src/lib.rs` before assuming a path exists on a given binary.
 
