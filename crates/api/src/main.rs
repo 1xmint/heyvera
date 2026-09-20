@@ -211,7 +211,7 @@ async fn main() {
     // Start container idle reaper (stops BYOS containers after 15min inactivity)
     cortex_api::docker::spawn_idle_reaper(state.clone());
 
-    let app = cortex_api::build_router(state.clone());
+    let app = cortex_api::build_cortex_router(state.clone());
 
     let port: u16 = std::env::var("CORTEX_PORT")
         .ok()

@@ -45,9 +45,8 @@ heyvera.org, www.heyvera.org {
 		}
 	}
 
-	# Billing / Cortex product API (same-origin /api/* for SPA)
-	handle /api/* {
-		reverse_proxy localhost:3001 {
+	handle /metrics {
+		reverse_proxy localhost:3002 {
 			header_up Host {upstream_hostport}
 			header_up X-Real-IP {remote}
 			header_up X-Forwarded-For {remote}
@@ -55,14 +54,24 @@ heyvera.org, www.heyvera.org {
 		}
 	}
 
-	# Remaining v1 endpoints → legacy Node product API (non-social)
-	handle /v1/* {
-		reverse_proxy localhost:3402 {
+	# Literal Socials-owned and duplicated API families. Cortex-only paths are
+	# deliberately not reachable through the HeyVera origin.
+	@heyvera_api path /api/health /api/billing/status /api/billing/checkout /api/billing/portal /api/billing/history /api/billing/usage /api/stripe/webhook /api/clerk/webhooks /api/admin/stats /api/admin/codes /api/admin/codes/* /api/admin/redemptions /api/admin/audit-log /api/admin/accounts/*/suspend /api/admin/accounts/*/unsuspend /api/admin/cleanup-orphaned-media /api/admin/reports
+	handle @heyvera_api {
+		reverse_proxy localhost:3002 {
 			header_up Host {upstream_hostport}
 			header_up X-Real-IP {remote}
 			header_up X-Forwarded-For {remote}
 			header_up X-Forwarded-Proto {scheme}
 		}
+	}
+
+	handle /api/* {
+		respond "Not found" 404
+	}
+
+	handle /v1/* {
+		respond "Not found" 404
 	}
 
 	handle /assets/* {
@@ -122,14 +131,31 @@ cortex.heyvera.org {
 }
 
 api.heyvera.org {
-	# Cortex product API
-	handle /api/* {
+	# Socials-owned and duplicated APIs stay on the Socials service.
+	@heyvera_api path /api/health /api/billing/status /api/billing/checkout /api/billing/portal /api/billing/history /api/billing/usage /api/stripe/webhook /api/clerk/webhooks /api/admin/stats /api/admin/codes /api/admin/codes/* /api/admin/redemptions /api/admin/audit-log /api/admin/accounts/*/suspend /api/admin/accounts/*/unsuspend /api/admin/cleanup-orphaned-media /api/admin/reports
+	handle @heyvera_api {
+		reverse_proxy localhost:3002 {
+			header_up Host {upstream_hostport}
+			header_up X-Real-IP {remote}
+			header_up X-Forwarded-For {remote}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Cortex compatibility paths are explicit; no catch-all can leak a newly
+	# added API into the wrong product.
+	@cortex_api path /api/chat /api/chat/* /api/runs /api/runs/* /api/context/* /api/keys /api/keys/* /api/github/* /api/projects /api/projects/* /api/admin/workers /api/admin/decisions /api/admin/runs /api/admin/runs/* /api/admin/pressure /api/admin/usage /api/admin/usage/* /api/admin/reconcile-counters /api/admin/containers /api/admin/containers/* /api/auth/* /api/authority/* /api/billing/referral/validate /api/conversations /api/conversations/* /api/credentials/* /api/deploy-info /api/deploy-metadata /api/deploy-status /api/deployment/* /api/integrations/* /api/groups/* /api/ledger /api/mc /api/mc/* /api/operations/* /api/providers /api/usage /api/usage/* /api/user/* /api/ws
+	handle @cortex_api {
 		reverse_proxy localhost:3001 {
 			header_up Host {upstream_hostport}
 			header_up X-Real-IP {remote}
 			header_up X-Forwarded-For {remote}
 			header_up X-Forwarded-Proto {scheme}
 		}
+	}
+
+	handle /api/* {
+		respond "Not found" 404
 	}
 
 	# HeyVera Social + Pulse + health — single owner: heyvera-server :3002
@@ -169,14 +195,17 @@ api.heyvera.org {
 		}
 	}
 
-	# Remaining v1 endpoints → legacy Node product API (if still needed)
-	handle /v1/* {
-		reverse_proxy localhost:3402 {
+	handle /metrics {
+		reverse_proxy localhost:3002 {
 			header_up Host {upstream_hostport}
 			header_up X-Real-IP {remote}
 			header_up X-Forwarded-For {remote}
 			header_up X-Forwarded-Proto {scheme}
 		}
+	}
+
+	handle /v1/* {
+		respond "Not found" 404
 	}
 
 	handle {

@@ -27,7 +27,7 @@ pub fn routes() -> Router<Arc<AppState>> {
 
     Router::new()
         // Public — lets clients discover Cortex's DID.
-        .route("/api/soma/identity", get(crate::soma_identity))
+        .route("/api/soma/identity", get(soma_identity))
         // Delegation bridge (Clerk user → Soma session).
         .route("/api/soma/session", post(crate::soma_bridge::create_session))
         .route("/api/soma/revoke", post(crate::soma_bridge::revoke_delegation))
@@ -37,6 +37,37 @@ pub fn routes() -> Router<Arc<AppState>> {
             "/api/soma/spend/{delegation_id}",
             get(crate::soma_bridge::get_spend_detail),
         )
+}
+
+#[cfg(feature = "soma")]
+async fn soma_identity(
+    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+) -> impl axum::response::IntoResponse {
+    use crate::lock::LockRecovering;
+
+    match &state.soma_heart {
+        Some(heart) => {
+            let chain = heart.heartbeat_chain.lock_recovering();
+            let capabilities = heart
+                .lineage
+                .as_ref()
+                .map(::soma::lineage::effective_capabilities)
+                .unwrap_or_else(|| vec!["*".into()]);
+            axum::Json(serde_json::json!({
+                "did": heart.did(),
+                "genome": heart.identity.genome,
+                "protocol": "soma-delegation/0.1",
+                "heartbeats": chain.len(),
+                "head_hash": chain.head_hash(),
+                "capabilities": capabilities,
+                "root_did": heart.root_did,
+                "has_lineage": heart.lineage.is_some(),
+            }))
+        }
+        None => axum::Json(serde_json::json!({
+            "error": "soma heart not initialized"
+        })),
+    }
 }
 
 /// No Soma routes. A request to `/api/soma/*` reaches the router's fallback and

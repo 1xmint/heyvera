@@ -25,7 +25,7 @@ async fn test_app() -> (axum::Router, tempfile::TempDir) {
     let ledger_path = workspace.join(".cortex/ledger.jsonl");
     let state = AppState::new(ledger_path, workspace, None).await;
 
-    (cortex_api::build_router(state), tmp)
+    (cortex_api::build_cortex_router(state), tmp)
 }
 
 async fn body_json(resp: axum::response::Response) -> serde_json::Value {

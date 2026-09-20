@@ -46,7 +46,7 @@ async fn test_app() -> (axum::Router, Arc<AppState>, tempfile::TempDir) {
     let scheduler_tx = scheduler::spawn_scheduler(state.clone());
     state.set_scheduler_tx(scheduler_tx).await;
 
-    let app = cortex_api::build_router(state.clone());
+    let app = cortex_api::build_cortex_router(state.clone());
     (app, state, tmp)
 }
 
@@ -97,7 +97,7 @@ async fn test_app_with_limits(
     let scheduler_tx = scheduler::spawn_scheduler(state.clone());
     state.set_scheduler_tx(scheduler_tx).await;
 
-    let app = cortex_api::build_router(state.clone());
+    let app = cortex_api::build_cortex_router(state.clone());
     (app, state, tmp)
 }
 
