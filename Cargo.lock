@@ -812,6 +812,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "hex",
+ "heyvera-db",
  "hmac",
  "http-body-util",
  "jsonwebtoken",
@@ -1682,6 +1683,16 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "heyvera-db"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "heyvera-server-bin"

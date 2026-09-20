@@ -59,6 +59,7 @@ re-deriving anything.
 | 34 | Prove the pinned CLI consumes the real Rust stub listener | **done** — PR [#646](https://github.com/1xmint/heyvera/pull/646) squash-merged at `1193c981`; `$0` provider spend. |
 | 35 | Cortex extraction PR 1 — sever Socials from the Cortex ledger | **implemented locally, not pushed** — branch `fix/socials-sever-cortex-ledger`; new Pulse drafts and Socials checkout/usage fail closed with 503 while existing lifecycle remains. |
 | 36 | Cortex extraction PR 2 — make route ownership executable | **implemented locally, not pushed** — stacked branch `refactor/product-route-ownership`; literal 92/98/15 ownership manifest, negative route probes, separate routers, and explicit Caddy routing. |
+| 37 | Cortex extraction PR 3 — create the independent Socials database boundary | **implemented locally, not pushed** — stacked branch `refactor/socials-database-boundary`; 43-table checksummed baseline, read-only inspector/exporter, FTS rebuild, and mixed-v68 compatibility proof. |
 
 ## PR C — what landed, and what it deliberately did not
 
@@ -3036,7 +3037,7 @@ code-only task queued by this plan.
 | One real model invocation, end to end | The path is built, but there is no provider credential or approved supplier budget. | Josh supplies a narrow, short-lived key and explicitly authorizes the bounded spend. |
 | Production execution | Historical deployment evidence found an unauthenticated worker, no host sandbox image, and no provider key. | Josh explicitly authorizes a current production deployment and the required secret/configuration changes. |
 | `p_fa`, decomposition crossover, and solo-builder evidence | These are measurements, not missing implementations. | Real API credits, calibrated per-leaf priors, and an observed independent user. |
-| Socials/Cortex extraction | Josh decided Socials does not retain the Cortex ledger. PRs 1 and 2 are implemented locally on stacked branches: billing fails closed, both routers now match the literal 205-template ownership manifest, and foreign routes return 404. | Land and verify the two boundary PRs, then create the independent Socials database crate; repository creation, pushes, production movement, and deployment still require separate authorization. |
+| Socials/Cortex extraction | Josh decided Socials does not retain the Cortex ledger. PRs 1–3 are implemented locally on stacked branches: billing fails closed, both routers match the literal route manifest, and the additive `heyvera-db` can safely export the 43-table Socials v1 schema. | Land and verify the three boundary PRs, then move Socials into its independent API/state graph; repository creation, pushes, production movement, and deployment still require separate authorization. |
 
 Therefore **the implementation plan is autonomously complete, but the product
 validation plan is not complete**. A separate Cortex repository is premature
