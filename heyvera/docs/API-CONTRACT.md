@@ -3,7 +3,7 @@
 Generated as Phase 0 lock. Frontend source: `heyvera/src/api/social.ts`, `pulse.ts`.  
 Backend source: `crates/api/src/lib.rs` → `build_heyvera_router`.
 
-Legend: **OK** mounted + used · **MISSING** FE calls / needs route · **PARTIAL** works with caveats · **ORPHAN FE** helper unused or dead
+Legend: **OK** mounted + used · **PAUSED** deliberately fail-closed · **MISSING** FE calls / needs route · **PARTIAL** works with caveats · **ORPHAN FE** helper unused or dead
 
 ## Profiles
 
@@ -84,8 +84,8 @@ Legend: **OK** mounted + used · **MISSING** FE calls / needs route · **PARTIAL
 | FE usage | Method + path | Backend | Notes |
 |----------|---------------|---------|-------|
 | Drafts CRUD-ish | `/v1/pulse/drafts*` | OK | approve/reject/publish/audit |
-| Create draft | `POST /v1/pulse/drafts` | OK | Dual auth like create post; canonical audience parsing; unsupported Guild/Circle automation fails closed |
-| Chat / tools agent | `POST /v1/pulse/chat` | PARTIAL | `tools_v1` deterministic create/list drafts; not full LLM |
+| Create draft | `POST /v1/pulse/drafts` | PAUSED | Returns `503 SOCIALS_BILLING_UNAVAILABLE`; creates no draft and never reads or writes Cortex credits |
+| Chat / tools agent | `POST /v1/pulse/chat` | PARTIAL | Read/transition tools remain; `create_draft` returns `SOCIALS_BILLING_UNAVAILABLE` and creates no draft |
 
 ## Agent bearer auth
 

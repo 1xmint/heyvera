@@ -51,6 +51,7 @@ mod run_stream;
 pub mod scheduler;
 pub mod social;
 pub mod social_policy;
+mod socials_billing;
 #[cfg(feature = "soma")]
 pub mod soma;
 #[cfg(feature = "soma")]
@@ -948,14 +949,15 @@ pub fn build_heyvera_router(state: Arc<AppState>) -> Router {
         .route("/v1/pulse/schedules/process", post(pulse::process_due_schedules))
         .route("/v1/pulse/goals", get(pulse::list_goals).post(pulse::create_goal))
         .route("/v1/pulse/goals/{id}", get(pulse::get_goal))
-        // Shared auth/billing (heyvera router)
+        // Socials auth/subscription maintenance. New checkout and usage are
+        // intentionally unavailable and never touch the Cortex ledger.
         .route("/api/auth/status", get(auth::auth_status))
-        .route("/api/billing/status", get(billing::get_billing_status))
-        .route("/api/billing/checkout", post(billing::create_checkout))
-        .route("/api/billing/portal", post(billing::create_portal))
-        .route("/api/billing/history", get(billing::get_billing_history))
-        .route("/api/billing/usage", get(billing::get_billing_usage))
-        .route("/api/stripe/webhook", post(billing::stripe_webhook))
+        .route("/api/billing/status", get(socials_billing::get_billing_status))
+        .route("/api/billing/checkout", post(socials_billing::create_checkout))
+        .route("/api/billing/portal", post(socials_billing::create_portal))
+        .route("/api/billing/history", get(socials_billing::get_billing_history))
+        .route("/api/billing/usage", get(socials_billing::get_billing_usage))
+        .route("/api/stripe/webhook", post(socials_billing::stripe_webhook))
         .route("/api/clerk/webhooks", post(clerk_webhooks::clerk_webhook))
         .merge(admin_routes)
         // Rate-limit all HeyVera API routes (IP + account category limits).

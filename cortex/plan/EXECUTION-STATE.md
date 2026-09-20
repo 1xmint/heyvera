@@ -5,7 +5,7 @@ Running checkpoint for the actualization of
 lands; an interrupted session should be able to resume from it without
 re-deriving anything.
 
-**Last updated:** 2026-09-12 (autonomous completion boundary reconciled)
+**Last updated:** 2026-09-13 (Cortex extraction boundary PR 1 implemented locally)
 **Base commit at start:** `c8ca2941` (main — "clear all seven open dependency advisories (#498)")
 **Wave 2 base:** `3db58b13` (main — "make the sandbox check able to block a merge (#504)")
 
@@ -57,6 +57,7 @@ re-deriving anything.
 | 32 | Prove the real Claude CLI gateway request shape with no network | **done** — PR [#644](https://github.com/1xmint/heyvera/pull/644) squash-merged at `e01e32b0`; `$0` provider spend. |
 | 33 | Make the stub listener compatible with the measured streaming shape | **done** — PR [#645](https://github.com/1xmint/heyvera/pull/645) squash-merged at `54ff6e10`; `$0` provider spend. |
 | 34 | Prove the pinned CLI consumes the real Rust stub listener | **done** — PR [#646](https://github.com/1xmint/heyvera/pull/646) squash-merged at `1193c981`; `$0` provider spend. |
+| 35 | Cortex extraction PR 1 — sever Socials from the Cortex ledger | **implemented locally, not pushed** — branch `fix/socials-sever-cortex-ledger`; new Pulse drafts and Socials checkout/usage fail closed with 503 while existing lifecycle remains. |
 
 ## PR C — what landed, and what it deliberately did not
 
@@ -3034,7 +3035,7 @@ code-only task queued by this plan.
 | One real model invocation, end to end | The path is built, but there is no provider credential or approved supplier budget. | Josh supplies a narrow, short-lived key and explicitly authorizes the bounded spend. |
 | Production execution | Historical deployment evidence found an unauthenticated worker, no host sandbox image, and no provider key. | Josh explicitly authorizes a current production deployment and the required secret/configuration changes. |
 | `p_fa`, decomposition crossover, and solo-builder evidence | These are measurements, not missing implementations. | Real API credits, calibrated per-leaf priors, and an observed independent user. |
-| Socials/Cortex extraction | `pulse.rs` still charges Cortex credits for Socials work. Moving the database boundary before deciding ownership would encode the product decision accidentally. | Josh decides whether Socials retains the Cortex ledger; the mechanical crate/repository extraction can follow. |
+| Socials/Cortex extraction | Josh decided Socials does not retain the Cortex ledger. PR 1 is implemented locally on `fix/socials-sever-cortex-ledger`: new Pulse drafts, Socials checkout, and Socials usage fail closed while existing subscription/draft lifecycle remains available. | Land and verify PR 1, then continue with the route-manifest boundary; repository creation, pushes, production movement, and deployment still require separate authorization. |
 
 Therefore **the implementation plan is autonomously complete, but the product
 validation plan is not complete**. A separate Cortex repository is premature

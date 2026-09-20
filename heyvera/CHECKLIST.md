@@ -234,6 +234,7 @@ If a session dies or Grok quota runs out, **resume from this file**.
 | 2026-07-17 | tools_v2 gated on server LLM keys; always fall back to tools_v1 |
 | 2026-07-17 | Soft-poll for notifs/DMs before social WS/SSE |
 | 2026-07-17 | Goal plans are deterministic templates, not Temporal runtime |
+| 2026-09-13 | Socials no longer uses Cortex credits; new Pulse drafts and checkout return `503 SOCIALS_BILLING_UNAVAILABLE` until Socials commercial policy is approved |
 
 ---
 
@@ -247,6 +248,7 @@ If a session dies or Grok quota runs out, **resume from this file**.
 6. [~] Goal plan MVP **shipped** (templates); Temporal-style step executor still deferred
 7. [!] Schedule process cron must be wired in deploy (docs only until ops configures)
 8. [!] Legacy linked agents without `agent_key_hash` need **Rotate key** before bearer auth works
+9. [!] New Pulse drafts and Socials checkout are intentionally paused pending the Socials billing/entitlement decision; existing subscription management and draft lifecycle remain available
 
 ---
 
